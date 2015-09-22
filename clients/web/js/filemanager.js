@@ -10,6 +10,7 @@ window.FileManager = (function() {
     this.treeHolder = place;
     this.treeOptions = options;
     this.jstree = null;
+    this.jsonconfig = {};
     this.codearea = options.codearea;
     this.outline = null;
     this.tools = null;
@@ -23,7 +24,7 @@ window.FileManager = (function() {
     this.githubId = 1; //next id to github conections.
     this.initFileManager();
     this.initialize();
-    
+ 
   }
 
   FileManager.prototype = {
@@ -57,69 +58,95 @@ window.FileManager = (function() {
     function() {
       var self = this;
       $(this.treeHolder).append("<div id='"+this.treeId+"'></div>");
-      /*
-	 The next variables are the config of the tree, we try to use all as posible the capacities
-	 of the jstree jquery plugin.
-	 fmCore: is the basic config of the jstree.
-	 fmDnd: config of drag and drop plugin, with this we can control what is available to copy, 
-	 and do it with a simple action: "drag and drop".
-	 fmTypes: config of types plugin, whit this we control the diferents node types, to change
-	 icons, and to use in the other plugins.
-	 fmCrrm: config of crrm.
-       */
-      
-      var fmCrrm = {
-	"move" : {
-	  "always_copy"     : true, //force always copy, to prevent Lock folders/files been moved
-	  "open_onmove"     : false,
-	  "default_position": "last",
-	  "check_move"      : function (m) { 
-	    // if np (new parent) isnt a folder, you can not move
-	    if( $(m.np).attr("rel") !== "folder"){
-	      return false;
-	    }else if($(m.np).attr("id") === $(m.op).attr("id")){
-	      //if np is the same than my op (old parent)
-	      return false;
-	    }
-            return true;
-          }
-	  
-	}
-	
+      //prepare events before build tree
+      $(this.treeHolder).find("#"+this.treeId)
+	    //when jstree finish
+	    .on("ready.jstree",function(e,d){
+	      //first off all save the reference
+	      self.jstree=$(self.treeHolder).find("#"+self.treeId).jstree(true);
+	      self.treeOptions.callback();
+	    });
 
+      //json variables for jstree
+      self.initJSON();
+     console.log("de vuelta",self.jsonconfig);
+
+     $(this.treeHolder).find("#"+this.treeId).jstree(self.jsonconfig);
+
+    },
+	 
+	 initJSON:
+    function(){
+      var self = this;
+      self.jsonconfig = {
+	"core"        : self.JSONcore(),
+	"plugins"     : self.JSONplugins(),
+	"themes"      : self.JSONthemes(),
+	"types"       : self.JSONtypes(),
+	"dnd"         : self.JSONdnd(),
+	"crrm"        : self.JSONcrrm(),
+	"sort"        : function(a,b){return self.JSONsort(this,a,b);},
+	"contextmenu" : self.JSONmenu()
       };
-      var fmType = {
-	"max_depth":-2,//-2 is to desactivate the control of this to do the tree faster
+    },
+	 JSONcore:
+    function(){
+      return  {
+	  "animation" : 0,
+	  "check_callback" : true,
+      };
+    },
+
+	 JSONplugins:
+    function(){
+      return [
+	  "core","contextmenu", "dnd", 
+	  "themes", "ui", "crrm",
+	  "unique", "state",  "wholerow",
+	  "sort", "types"
+	];
+    },
+	 JSONthemes:
+    function(){
+      return {theme: "classic"};
+    },
+	 JSONdnd:
+    function(){
+      return {"drag_copy":"on"};
+    },
+	 JSONtypes:
+    function(){
+      return {"max_depth":-2,//-2 is to desactivate the control of this to do the tree faster
 	"max_children":-2,
 	"valid_children":["file","folder","fileLock","folderLock","fileRepo","folderRepo"], //root valid childs
-	"types":{
+//	"types":{
 	  "file":{
-	    "icon": {image:"./lib/jstree/themes/classic/file.png"},
+	    "icon": "./lib/jstree/themes/classic/file.png",
 	    "valid_children": "none"
 	  },
 	  "folder":{
-	    "icon": {image:"./lib/jstree/themes/classic/folder.png"},
+	    "icon": "./lib/jstree/themes/classic/folder.png",
 	    //We permit Lock type, to allow temporal copies that will be converts in NOT lock types.
 	    "valid_children":["file","folder","fileLock","folderLock","fileRepo","folderRepo"]
 	  },
 	  "fileLock":{
 	    "delete_node" : false,
 	    "remove" : false,
-	    "icon": {image:"./lib/jstree/themes/classic/fileL.png"},
+	    "icon": "./lib/jstree/themes/classic/fileL.png",
 	    "valid_children":"none"
 	  },
 	  "folderLock":{
 	    "delete_node" : false,
 	    "remove" : false,
-	    "icon": {image:"./lib/jstree/themes/classic/folderL.png"},
+	    "icon": "./lib/jstree/themes/classic/folderL.png",
 	    "valid_children":["fileLock","folderLock","folderRepo","fileRepo"]
 	  },
 	  "fileRepo":{
-	    "icon": {image:"./lib/jstree/themes/classic/fileR.png"},
+	    "icon": "./lib/jstree/themes/classic/fileR.png",
 	    "valid_children":"none"
 	  },
 	  "folderRepo":{
-	    "icon": {image:"./lib/jstree/themes/classic/folderR.png"},
+	    "icon": "./lib/jstree/themes/classic/folderR.png",
 	    "valid_children":["fileRepo","folderRepo"]
 	  },
 	  "#":{
@@ -128,449 +155,35 @@ window.FileManager = (function() {
 	    "remove" : false,
 	    "valid_children" : ["folder","folderLock","folderRepo"]
 	  }
-	}
+//	}
       };
-      this.jstree = 
-      $(this.treeHolder).find("#"+this.treeId)
-	    .jstree({
-	      json_data : {
-		data : {}		
-	      },
-	      /* Plugins:
-	       * types, allow makes differences between locks files, folders.. 
-	       * core, is basic to move and copy
-	       * ui, allow interface
-	       * contextmenu, to have menus in all nodes
-	       * sort, to sort the nodes
-	       * dnd, drag and drop
-	       */
-	      "plugins": ["types","core","unique","dnd","themes","json_data","ui","crrm","contextmenu","sort"],
-	      "themes": {theme: "classic"},
-	      "dnd":{"drag_copy":"on"},
-	      "types": fmType,
-	      "crrm":fmCrrm,
-	      "sort":function(a,b){
-		var ta = $(a).attr("rel");
-		var tb = $(b).attr("rel").replace("Lock","").replace("Repo","");
-		if(ta == tb)
-		  return this.get_text(a) > this.get_text(b) ? 1:-1;
-		return a > b ? 1:-1;
-	      },
-	      "contextmenu": { 
-		"items":  function(node) {
-		  switch ( node.attr('rel') ) {
-		    case "folder":
-		      return {
-			"CreateFile": {
-			  "label": "New file",
-			  "action": function (obj) {
-			    var fmId = obj.attr('fmId');
-			    var x = self.addFile(null,self.fmObj[ fmId ].node.attr('fmId'),"","");	    
-			    self.openFile( x );
-			  }
-			},
-			"CreateFolder": {
-			  "label": "New folder",
-			  "separator_after":true,
-			  "action": function (obj) {
-			    var fmId = obj.attr('fmId');
-			    var x = self.addFolder(null,self.fmObj[ fmId ].node.attr('fmId'),"");
-			    
-			  }
-			},
-			"RemoteFile": {
-			  "label": "Add Remote File...",
-			  "action": function (obj) {
-			    var fmId = obj.attr('fmId');
-			    self.requestRemote(self,fmId);
-			    /*var x = self.addFile(null,self.fmObj[ fmId ].node.attr('fmId'),"","","Repo");	    
-			       self.openFile( x );*/
-			  }
-			},
-			"Rename": {
-			  "label": "Rename Folder",
-			  "separator_before":true,
-			  "action": function (obj) {
-			    this.rename(obj);
-			  }
-			},
-			"Delete": {
-			  "label": "Delete Folder",
-			  "action": function (obj) {
-			    this.remove(obj);
-			  }
-			},
-			"Copy": {
-			  "label": "Copy Folder",
-			  "action": function (obj) {
-			    this.copy(obj);
-			    self.copy=true;
-			    
-			  }
-			},
-			"Cut": {
-			  "label": "Cut Folder",
-			  "action": function (obj) {
-			    this.cut(obj);
-			    self.copy=false;
-			  }
-			},
-			"Paste": {
-			  "label": "Paste",
-			  "separator_after":true,
-			  "action": function (obj) {
-			    self.paste=true;
-			    this.paste(obj);
-			  }
-			},
-			"Apply": {
-			  "label": "Apply here",
-			  "separator_before": true,
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.tools.apply(ids);
-			  }
-			},
-			"Outline": {
-			  "label": "Refresh Outline here",
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.outline.refresh(ids);
-			  }
-			}
-		      };
-		    case "folderLock":
-		      return {
-			"Copy": {
-			  "label": "Copy Folder",
-			  "separator_after":true,
-			  "action": function (obj) {
-			    this.copy(obj);
-			    self.copy=true;
-			  }
-			},
-			"Apply": {
-			  "label": "Apply here",
-			  "separator_before": true,
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.tools.apply(ids);
-			  }
-			},
-			"Outline": {
-			  "label": "Refresh Outline here",
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.outline.refresh(ids);
-			  }
-			}
-		      };
-
-		    case "file":
-		      return {
-			"Rename": {
-			  "label": "Rename File",
-			  "separator_before":true,
-			  "action": function (obj) {
-			    this.rename(obj);
-			    
-			  }
-			},
-			"Delete": {
-			  "label": "Delete File",
-			  "action": function (obj) {
-			    this.remove(obj);
-			  }
-			},
-			"Copy": {
-			  "label": "Copy File",
-			  "action": function (obj) {
-			    this.copy(obj);
-			    self.copy=true;
-			  }
-			},
-			"Cut": {
-			  "label": "Cut File",
-			  "separator_after":true,
-			  "action": function (obj) {
-			    this.cut(obj);
-			    self.copy=false;
-
-			  }
-			},
-			"Apply": {
-			  "label": "Apply here",
-			  "separator_before": true,
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.tools.apply(ids);
-			  },
-			},
-			"Outline": {
-			  "label": "Refresh Outline here",
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.outline.refresh(ids);
-			  }
-			}
-		      };
-		    case "folderRepo":
-		      return {
-			"Copy": {
-			  "label": "Copy Folder",
-			  "action": function (obj) {
-			    this.copy(obj);
-			    self.copy=true;
-			    
-			  }
-			},
-			"Delete": {
-			  "label": "Delete Folder",
-			  "action": function (obj) {
-			    this.remove(obj);
-			  }
-			},
-			"Apply": {
-			  "label": "Apply here",
-			  "separator_before": true,
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.tools.apply(ids);
-			  }
-			},
-			"Outline": {
-			  "label": "Refresh Outline here",
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.outline.refresh(ids);
-			  }
-			}
-
-		      };
-		    case "fileRepo":
-		      return {
-			"Rename": {
-			  "label": "Rename File",
-			  "separator_before":true,
-			  "action": function (obj) {
-			    this.rename(obj);
-			    
-			  }
-			},
-			"Copy": {
-			  "label": "Copy File",
-			  "action": function (obj) {
-			    this.copy(obj);
-			    self.copy=true;
-			    
-			  }
-			},
-			"Delete": {
-			  "label": "Delete File",
-			  "action": function (obj) {
-			    this.remove(obj);
-			  }
-			},
-			"Apply": {
-			  "label": "Apply here",
-			  "separator_before": true,
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.tools.apply(ids);
-			  }
-			},
-			"Outline": {
-			  "label": "Refresh Outline here",
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.outline.refresh(ids);
-			  }
-			}
-		      };
-		    case "fileLock":
-		      return {
-			"Copy": {
-			  "label": "Copy File",
-			  "separator_after":true,
-			  "action": function (obj) {
-			    this.copy(obj);
-			    self.copy=true;
-			  }
-			},
-			"Apply": {
-			  "label": "Apply here",
-			  "separator_before": true,
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.tools.apply(ids);
-			  }
-			},
-			"Outline": {
-			  "label": "Refresh Outline here",
-			  "action": function (obj) {
-			    var ids=new Array();
-			    if(obj.length==1)
-			      ids[0]=$(obj).attr("fmid");
-			    else
-			      ids=$(obj).attr("fmid");
-			    self.outline.refresh(ids);
-
-			  }
-			}
-
-		      };
-
-		      break;
-		    default: 
-		      return null;
-		  }
-		}
-	      }})
-	    .bind("delete_node.jstree",function(e, data){
-	      var id = $(data.rslt.obj).attr("fmId");
-	      var parentId = $(data.rslt.parent).attr("fmId");
-	      if ( parentId && parentId >= 0) {
-		var ttype = self.fmObj[parentId].info.attr.rel;
-		if(ttype == "fileLock" || ttype == "folderLock"){
-		  $.jstree.rollback(data.rlbk);
-		}else{
-		  var parentMembers = self.fmObj[ parentId ].info.attr.members;
-		  var sizeMem = parentMembers.length;
-		  var find = -1;
-		  for(var i = 0; i < sizeMem && find < 0; i++){
-		    find = (parentMembers[i] == id) ? i:-1;
-		  }
- 		  if(find >=0){
-		    parentMembers[find] = parentMembers[sizeMem-1];
-		    delete parentMembers[sizeMem-1];
-		    parentMembers.length--;
-		  }
-		  self.updateDelete(id,data.inst);
-		}
-	      }else{
-		$.jstree.rollback(data.rlbk);
-	      }
-	    })
-	    .bind("dblclick.jstree", function (e, data) {
-	      var fmId = self.jstree.jstree('get_selected').attr('fmId');
-	      var fmInfo = self.fmObj[ fmId ].info;    
-	      if ( fmInfo.attr.rel == "file" ||fmInfo.attr.rel=="fileLock" || fmInfo.attr.rel=="fileRepo") {
-		self.openFile( fmId );
-	      }else{
-		self.openFolder(fmId);
-	      }
-	    })
-	    .bind("loaded.jstree", function (event, data) {
-	      self.treeOptions.callback();
-	    })
-	    .bind("move_node.jstree",function(event,data){
-	      var cont = data.inst.get_container();
-	      var m = data.rslt;
-	      var roll = false;
-	      //if we cut or copy some node and before paste we move an other,
-	      // we need know if we copy or cut the first element, because the move ever is copy
-	      var auxcopy =self.copy; 
-	      if(!self.paste) self.copy = true;
-	      if($(m.np).attr("id") == $(m.op).attr("id"))
-		roll = true
-	      else if($(m.np).attr("rel") && $(m.np).attr("rel") !== "folder")
-		roll = true;
-	      else if(self.copy)
-		roll = self.updateCopy(m.oc,m.np,data.inst);
-	      else
-		roll = self.updateCut(m.o,m.np,data.inst,true);
-	      self.copy=true;
-	      if(!self.paste)self.copy=auxcopy;
-	      self.paste=false;
-	      if(roll) $.jstree.rollback(data.rlbk);
-	    })
-	    .bind("rename_node.jstree", function (event, data) {
-	      var fmId = data.rslt.obj.attr('fmId');
-	      var oldfmInfo = self.fmObj[ fmId ].info;
-	      var oldname = oldfmInfo.data;
-	      var oldpath = self.calculatePath(oldfmInfo);
-	      var newfmInfo = $.extend({},oldfmInfo);
-	      var newname = data.rslt.name;
-	      newfmInfo.data = newname;
-	      newfmInfo.attr.label = newname;
-	      if(newname !=oldname){
-		var newpath = self.calculatePath(newfmInfo);
-		if(!self.existsFm(newpath)){
-		  self.fmObj[ fmId ].info.data = newname;
-		  
-		  self.fmIdByPath[newpath] =  self.fmIdByPath[oldpath];
-		  delete self.fmIdByPath[oldpath];
-		  if(newfmInfo.attr.rel == "folder" || newfmInfo.attr.rel == "folderRepo"){
-		    $(newfmInfo.attr.members).each(function(k,v){
-		      var tempfmInfo = self.fmObj[v].info;
-		      var newtemppath = self.calculatePath(tempfmInfo);
-		      var oldtemppath = newtemppath.replace(newpath,oldpath);
-		      self.fmIdByPath[newtemppath] =  self.fmIdByPath[oldtemppath];
-		      delete self.fmIdByPath[oldtemppath];
-		    });
-		  }else if(self.fmObj[ fmId ].info.attr.open){
-		    self.codearea.updateTitle(fmId,newname);
-		    if($("#mdfile-"+fmId).length){
-		      var parent = $("#mdfile-"+fmId).parent();
-		      $(".ui-dialog-title",parent).html(newname);
-		    }
-		  }
-		}else{
-		  $( "<div>Sorry, but '"+newname
-		    +"' already exists in this folder, please choose a different name</div>" ).dialog({
-		      title: "Error: Filename already in use",
-		      resizable: false,
-		      height:140,
-		      modal: true
-		    });
-		  $.jstree.rollback(data.rlbk);
-		}
-	      }
-	    });
+    },
+	 JSONcrrm:
+    function(){
+      return {};
+    },
+	 JSONsort:
+    function(ref,a,b){
+      var A = ref.get_type(a);
+      var B = ref.get_type(b);
+      var value ={ 
+	FolderLock  : 5,
+	FileLock    : 4,
+	FolderRepo  : 3,
+	FileRepo    : 2,
+	Folder      : 1,
+	File        : 0
+      };
+      return (value[A]==value[B] ?
+		       ( ref.get_text(a) > ref.get_text(b) ?
+			 1 : -1) :
+		       ( value[A] > value[B] ?
+			 1 : -1));
+     
+    },
+	 JSONmenu:
+    function(){
+      return {};
     },
 	 //
 	 bindToCodeArea: 
@@ -726,8 +339,8 @@ window.FileManager = (function() {
 		    //
     addFolder:
     function( label, parentId , tipo) {
-
-      var parent = undefined;
+      var self = this;
+      var parent = null;
       if ( parentId ) parent = this.fmObj[ parentId ].node;
       else parentId = null;
       var ttype = "folder";
@@ -738,9 +351,10 @@ window.FileManager = (function() {
       }
       var fmTag = this.fmId_to_fmTag( this.fmId );
       var fmInfo = { 
-	data: label, 
-	attr: { id: fmTag, 
-		fmId: this.fmId, 
+	text: label, 
+	type: ttype,
+	id: fmTag, 
+	attr: {	fmId: this.fmId, 
 		rel : ttype,
 		members : new Array(),
 		label: label,
@@ -758,8 +372,10 @@ window.FileManager = (function() {
 	repeated = this.existsFm(path);
 	intento++;
       }
-      var node = this.jstree.jstree("create", parent, "last", fmInfo , false, true );
-      
+      //var node = this.jstree.jstree("create", parent, "last", fmInfo , false, true );
+      console.log("create_node",fmInfo);
+      var node = self.jstree.create_node(parent,fmInfo,"last");
+
       this.fmObj[ fmInfo.attr.fmId ] = { info: fmInfo, node: node };
       this.fmId++;
       
@@ -810,9 +426,9 @@ window.FileManager = (function() {
 	intento++;
       }
      
-      var node = this.jstree.jstree("create", parent, "last", fmInfo, false, true );
+//      var node = this.jstree.jstree("create", parent, "last", fmInfo, false, true );
       
-      this.fmObj[ fmInfo.attr.fmId ] = { info: fmInfo, node: node };
+      this.fmObj[ fmInfo.attr.fmId ] = { info: fmInfo, node: null };
       this.fmId++;
       
       if ( parentId ) {
@@ -1058,7 +674,7 @@ window.FileManager = (function() {
 		    //
     closeAll:
     function() {
-      this.jstree.jstree("close_all", -1);
+     // this.jstree.close_all( -1);
     },
 		    //
     getIdByPath:
