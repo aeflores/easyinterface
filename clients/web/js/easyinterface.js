@@ -328,9 +328,9 @@ window.EasyInterface = (function() {
 	    // initialize the use projects are
 	    this.userProjectsCatId = this.filemanager.addFolder("User_Projects"); 	    
 
-/*	    var defaultFileId = this.filemanager.addFile("noname1"+_ei.file_ext,this.userProjectsCatId,"",null);
+	    var defaultFileId = this.filemanager.addFile("noname1"+_ei.file_ext,this.userProjectsCatId,"",null);
 	    this.filemanager.openFile(defaultFileId);
-*/
+
 	    this.initExamples();
 	    this.filemanager.closeAll();
 	},

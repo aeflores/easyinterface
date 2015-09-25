@@ -10,14 +10,12 @@ window.FileManager = (function() {
     this.treeHolder = place;
     this.treeOptions = options;
     this.jstree = null;
-    this.jsonconfig = {};
     this.codearea = options.codearea;
     this.outline = null;
     this.tools = null;
     this.fmId = 1;
     this.fmObj = new Array();
     this.fmIdByPath = new Array();
-    this.objToMove = null;
     this.copy=true;
     this.paste=false;
     this.githubs = new Array(); // 0-> for general conect (without user)
@@ -65,28 +63,32 @@ window.FileManager = (function() {
 	      //first off all save the reference
 	      self.jstree=$(self.treeHolder).find("#"+self.treeId).jstree(true);
 	      self.treeOptions.callback();
+	    })
+	    .on("dblclick.jstree",function(e,d){
+	      var fmIds = self.jstree.get_selected();
+	      $(fmIds).each(function(k,v){
+		console.log(k,v);
+	      });
 	    });
 
-      //json variables for jstree
-      self.initJSON();
-     console.log("de vuelta",self.jsonconfig);
-
-     $(this.treeHolder).find("#"+this.treeId).jstree(self.jsonconfig);
-
+     $(this.treeHolder).find("#"+this.treeId).jstree(self.cfgJSON());
     },
 	 
-	 initJSON:
+	 cfgJSON:
     function(){
       var self = this;
-      self.jsonconfig = {
+      return {
 	"core"        : self.JSONcore(),
 	"plugins"     : self.JSONplugins(),
 	"themes"      : self.JSONthemes(),
 	"types"       : self.JSONtypes(),
 	"dnd"         : self.JSONdnd(),
-	"crrm"        : self.JSONcrrm(),
 	"sort"        : function(a,b){return self.JSONsort(this,a,b);},
-	"contextmenu" : self.JSONmenu()
+	"contextmenu" : {
+	  "items":function(node){
+	    return self.JSONmenu(this,node);
+	  }
+	}
       };
     },
 	 JSONcore:
@@ -116,51 +118,37 @@ window.FileManager = (function() {
     },
 	 JSONtypes:
     function(){
-      return {"max_depth":-2,//-2 is to desactivate the control of this to do the tree faster
+      return {
+	"max_depth":-2,//-2 is to desactivate the control of this to do the tree faster
 	"max_children":-2,
-	"valid_children":["file","folder","fileLock","folderLock","fileRepo","folderRepo"], //root valid childs
-//	"types":{
-	  "file":{
-	    "icon": "./lib/jstree/themes/classic/file.png",
-	    "valid_children": "none"
-	  },
-	  "folder":{
-	    "icon": "./lib/jstree/themes/classic/folder.png",
-	    //We permit Lock type, to allow temporal copies that will be converts in NOT lock types.
-	    "valid_children":["file","folder","fileLock","folderLock","fileRepo","folderRepo"]
-	  },
-	  "fileLock":{
-	    "delete_node" : false,
-	    "remove" : false,
-	    "icon": "./lib/jstree/themes/classic/fileL.png",
-	    "valid_children":"none"
-	  },
-	  "folderLock":{
-	    "delete_node" : false,
-	    "remove" : false,
-	    "icon": "./lib/jstree/themes/classic/folderL.png",
-	    "valid_children":["fileLock","folderLock","folderRepo","fileRepo"]
-	  },
-	  "fileRepo":{
-	    "icon": "./lib/jstree/themes/classic/fileR.png",
-	    "valid_children":"none"
-	  },
-	  "folderRepo":{
-	    "icon": "./lib/jstree/themes/classic/folderR.png",
-	    "valid_children":["fileRepo","folderRepo"]
-	  },
-	  "#":{
-	    "start_drag" : false,
-	    "delete_node" : false,
-	    "remove" : false,
-	    "valid_children" : ["folder","folderLock","folderRepo"]
-	  }
-//	}
+	"file":{
+	  "icon": "./lib/jstree/themes/classic/file.png",
+	  "valid_children": "none"
+	},
+	"folder":{
+	  "icon": "./lib/jstree/themes/classic/folder.png",
+	  "valid_children":["file","folder","fileLock","folderLock","fileRepo","folderRepo"]
+	},
+	"fileLock":{
+	  "icon": "./lib/jstree/themes/classic/fileL.png",
+	  "valid_children":"none"
+	},
+	"folderLock":{
+	  "icon": "./lib/jstree/themes/classic/folderL.png",
+	  "valid_children":["fileLock","folderLock","folderRepo","fileRepo"]
+	},
+	"fileRepo":{
+	  "icon": "./lib/jstree/themes/classic/fileR.png",
+	  "valid_children":"none"
+	},
+	"folderRepo":{
+	  "icon": "./lib/jstree/themes/classic/folderR.png",
+	  "valid_children":["fileRepo","folderRepo"]
+	},
+	"#":{
+	  "valid_children" : ["folder","folderLock","folderRepo"]
+	}
       };
-    },
-	 JSONcrrm:
-    function(){
-      return {};
     },
 	 JSONsort:
     function(ref,a,b){
@@ -182,8 +170,117 @@ window.FileManager = (function() {
      
     },
 	 JSONmenu:
-    function(){
-      return {};
+    function(ref,node){
+      var self = this;
+      var fmId =  self.fmTag_to_fmId( node.id );
+      var ext_type = node.type.replace("file","").replace("folder","");
+      var items = {
+	"Apply": {
+	  "label": "Apply here",
+	  "action": function (obj) {
+	    var ids=new Array();
+	    ids[0]=fmId;
+	    self.tools.apply(ids);
+	  }
+	},
+	"Outline": {
+	  "label": "Refresh Outline here",
+	  "separator_after": true,
+	  "action": function (obj) {
+	    var ids=new Array();
+	    ids[0]=fmId;
+	    self.outline.refresh(ids);
+	  }
+	},
+	"CreateFile": {
+	  "label": "New file",
+	  "action": function (obj) {
+	    var x = self.addFile(null,fmId,"",ext_type);
+	    self.openFile( x );
+	  }
+	},
+	"CreateFolder": {
+	  "label": "New folder",
+	  "separator_after":true,
+	  "action": function (obj) {
+	    var x = self.addFolder(null,fmId,ext_type);
+	  }
+	},
+	"RemoteFile": {
+	  "label": "Add Remote Files...",
+	  "action": function (obj) {
+	    self.requestRemote(self,fmId);
+	  }
+	},
+	"Rename": {
+	  "label": "Rename",
+	  "separator_before":true,
+	  "action": function (obj) {
+	    self.jstree.edit(node);
+	  }
+	},
+	"Delete": {
+	  "label": "Delete",
+	  "action": function (obj) {
+	    self.jstree.delete_node(node);
+	  }
+	},
+	"Copy": {
+	  "label": "Copy",
+	  "separator_before":true,
+	  "action": function (obj) {
+	    self.jstree.copy(node);
+	    self.copy=true;
+	    
+	  }
+	},
+	"Cut": {
+	  "label": "Cut",
+	  "action": function (obj) {
+	    self.jstree.cut(node);
+	    self.copy=false;
+	  }
+	},
+	"Paste": {
+	  "label": "Paste",
+	  "separator_after":true,
+	  "action": function (obj) {
+	    self.paste=true;
+	    self.jstree.paste(node);
+	  }
+	}
+
+
+      };
+      switch(node.type){
+
+	case "folderLock":
+	case "fileLock":
+	  delete items.CreateFile;
+	  delete items.CreateFolder;
+	  delete items.RemoteFile;
+	  delete items.Rename;
+	  delete items.Delete;
+	  delete items.Cut;
+	  delete items.Paste;
+	  break;
+	case "fileRepo":
+	  delete items.CreateFile;
+	  delete items.CreateFolder;
+	case "folderRepo":
+	  delete items.RemoteFile;
+	  delete items.Cut;
+	  delete items.Paste;
+	  break;
+	case "file":
+	  delete items.CreateFile;
+	  delete items.CreateFolder;
+	  delete items.RemoteFile;
+	  delete items.Paste;
+	  break;
+      };
+      return items;
+
     },
 	 //
 	 bindToCodeArea: 
@@ -373,7 +470,6 @@ window.FileManager = (function() {
 	intento++;
       }
       //var node = this.jstree.jstree("create", parent, "last", fmInfo , false, true );
-      console.log("create_node",fmInfo);
       var node = self.jstree.create_node(parent,fmInfo,"last");
 
       this.fmObj[ fmInfo.attr.fmId ] = { info: fmInfo, node: node };
@@ -402,7 +498,9 @@ window.FileManager = (function() {
       }
 
       var fmInfo = {
-	data: label,
+	text: label,
+	type: ttype,
+	id: fmTag, 
 	attr: { id: fmTag, 
 		fmId: this.fmId, 
 		rel: ttype,
@@ -427,7 +525,8 @@ window.FileManager = (function() {
       }
      
 //      var node = this.jstree.jstree("create", parent, "last", fmInfo, false, true );
-      
+
+      var node = self.jstree.create_node(parent,fmInfo,"last");     
       this.fmObj[ fmInfo.attr.fmId ] = { info: fmInfo, node: null };
       this.fmId++;
       
